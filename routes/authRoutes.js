@@ -1,15 +1,15 @@
 const express = require('express');
-const { register, login, sendFriendRequest, acceptFriendRequest, getFriends, searchUsers, pendingRequest} = require('../controllers/authController.js');
+const { register, login, sendFriendRequest, acceptFriendRequest, getFriends, searchUsers, pendingRequest } = require('../controllers/authController.js');
 const auth = require('../middleware/authMiddleware.js');
 
 const router = express.Router();
 
 router.post('/register', register);
-router.post('/login',  login);
-router.post('/friend-request', auth, sendFriendRequest);
-router.put('/accept-friend-request', auth, acceptFriendRequest);
-router.get('/friends', auth, getFriends);
-router.get('/search', auth, searchUsers); 
-router.get('/pending-request', auth, pendingRequest)
+router.post('/login', login);
+router.post('/friend-request', auth, sendFriendRequest); // Auth required for friend request
+router.post('/accept-request', auth, acceptFriendRequest); // Accept friend request
+router.get('/friends', auth, getFriends); // Fetch friends list
+router.get('/search', auth, searchUsers); // Search users by username
+router.get('/pending-requests', auth, pendingRequest); // Get pending friend requests
 
-module.exports =  router;
+module.exports = router;

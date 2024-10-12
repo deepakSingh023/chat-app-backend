@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-require('dotenv').config(); // To load environment variables
+require('dotenv').config(); // Load environment variables
 
 const auth = (req, res, next) => {
   let token;
@@ -17,10 +17,10 @@ const auth = (req, res, next) => {
   try {
     // Verify the token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
+
     // Attach the user info (typically id) to the request object
-    req.user = { id: decoded.id }; 
-    
+    req.user = { id: decoded.id };
+
     // Proceed to the next middleware/controller
     next();
   } catch (error) {
@@ -29,4 +29,4 @@ const auth = (req, res, next) => {
   }
 };
 
-module.exports = auth;  // Use `auth` directly as middleware
+module.exports = auth;
