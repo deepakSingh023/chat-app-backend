@@ -66,17 +66,28 @@ const sendFriendRequest = async (req, res) => {
 
 // Accept a friend request
 const acceptFriendRequest = async (req, res) => {
-  const { senderId } = req.body; // Sender's ID from the request body
-  const userId = req.user.id; // Authenticated user ID from the middleware
+  const { id } = req.body; // Extracting 'id' from req.body
+  const userId = req.user ? req.user.id : null; // Get authenticated user ID
+
+  // Log the received id and userId
+  console.log('Received friend request from sender ID:', id);
+  console.log('Authenticated user ID:', userId);
+
+  if (!id) {
+    return res.status(400).json({ message: 'No request ID provided.' });
+  }
 
   try {
     const user = await User.findById(userId);
-    const sender = await User.findById(senderId);
+    const sender = await User.findById(id);
 
-    if (!sender) return res.status(404).json({ message: 'Sender not found.' });
+    if (!sender) {
+      console.log('Sender not found for ID:', id);
+      return res.status(404).json({ message: 'Sender not found.' });
+    }
 
-    // Check if the request exists
-    if (!user.receivedFriendRequests.includes(senderId)) {
+    // Check if friend request exists
+    if (!user.receivedFriendRequests.includes(sender._id)) {
       return res.status(400).json({ message: 'No friend request from this user.' });
     }
 
@@ -93,6 +104,7 @@ const acceptFriendRequest = async (req, res) => {
 
     res.status(200).json({ message: 'Friend request accepted.' });
   } catch (error) {
+    console.error('Error:', error.message);
     res.status(500).json({ message: 'Error accepting friend request.', error: error.message });
   }
 };
@@ -145,4 +157,49 @@ const searchUsers = async (req, res) => {
   }
 };
 
-module.exports = { register, login, sendFriendRequest, acceptFriendRequest, getFriends, searchUsers, pendingRequest };
+const rejectRequest = async (req, res) => {
+  const { id } = req.body; // The 'id' is the sender's ID (request ID)
+  const userID = req.user.id; // The authenticated user's ID
+
+  // If 'id' is not provided, return an error
+  if (!id) {
+    return res.status(400).json({ message: 'No request ID provided.' });
+  }
+
+  try {
+    const user = await User.findById(userID); // Authenticated user
+    const sender = await User.findById(id); // Sender (user who sent the friend request)
+
+    // Check if sender exists
+    if (!sender) {
+      console.log('Sender not found for ID:', id);
+      return res.status(404).json({ message: 'Sender not found.' });
+    }
+
+    // Check if the request exists in the receivedFriendRequests
+    if (!user.receivedFriendRequests.includes(sender._id)) {
+      return res.status(400).json({ message: 'No friend request from this user.' });
+    }
+
+    // Remove the friend request from both users
+    user.receivedFriendRequests.pull(sender._id);
+    sender.sentFriendRequests.pull(user._id);
+
+    await user.save();
+    await sender.save();
+
+    res.status(200).json({ message: 'Friend request rejected.' });
+  } catch (error) {
+    console.error('Error:', error.message);
+    res.status(500).json({ message: 'Error rejecting friend request.', error: error.message });
+  }
+};
+
+
+
+
+
+
+
+
+module.exports = { register, login, sendFriendRequest, acceptFriendRequest, getFriends, searchUsers, pendingRequest, rejectRequest };
