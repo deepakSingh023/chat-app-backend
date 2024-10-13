@@ -1,9 +1,11 @@
 // controllers/messageController.js
 const Message = require('../models/Message'); // Adjust the path as necessary
-
+const jwt = require('jsonwebtoken');
 // Controller to get messages between two users
 const getMessages = async (req, res) => {
-    const { userId1, userId2 } = req.query; // Pass user IDs as query parameters
+    const { userId1, userId2 } = req.params; // Assuming you're using params
+    console.log('Fetching messages between:', userId1, userId2); // Log user IDs
+
     try {
         const messages = await Message.find({
             $or: [
@@ -26,8 +28,9 @@ const createMessage = async (req, res) => {
         const newMessage = new Message({ sender: senderId, receiver: receiverId, content });
         await newMessage.save();
 
-        // Emit the message to all clients (optional: emit only to the receiver if you want)
-        req.io.emit('receiveMessage', newMessage); // Make sure to pass io to the request object if using this
+        console.log('Emitting message:', newMessage); // Log the message being emitted
+
+        req.io.emit('receiveMessage', newMessage);
 
         res.status(201).json(newMessage);
     } catch (error) {
@@ -35,5 +38,6 @@ const createMessage = async (req, res) => {
         res.status(500).send('Server error');
     }
 };
+
 
 module.exports = { getMessages, createMessage };

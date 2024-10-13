@@ -195,6 +195,31 @@ const rejectRequest = async (req, res) => {
   }
 };
 
+// Example route in your backend
+const removeFriend = async (req, res) => {
+  const { friendId } = req.body;
+  const userId = req.user.id;
+
+  try {
+      const user = await User.findById(userId);
+      const friend = await User.findById(friendId);
+
+      if (!friend) {
+          return res.status(404).json({ message: 'Friend not found.' });
+      }
+
+      // Remove the friend from both users' friend lists
+      user.friends.pull(friend._id);
+      friend.friends.pull(user._id);
+
+      await user.save();
+      await friend.save();
+
+      res.status(200).json({ message: 'Friend removed successfully.' });
+  } catch (error) {
+      res.status(500).json({ message: 'Error removing friend.', error: error.message });
+  }
+};
 
 
 
@@ -202,4 +227,4 @@ const rejectRequest = async (req, res) => {
 
 
 
-module.exports = { register, login, sendFriendRequest, acceptFriendRequest, getFriends, searchUsers, pendingRequest, rejectRequest };
+module.exports = { register, login, sendFriendRequest, acceptFriendRequest, getFriends, searchUsers, pendingRequest, rejectRequest, removeFriend };

@@ -4,9 +4,11 @@ const auth = require('../middleware/authMiddleware.js');
 
 const router = express.Router();
 
-// Use query parameters for getting messages between two users
-router.route('/messages/:userId1/:userId2')
-  .get(auth, getMessages)
-  .post(auth, createMessage);
+// GET messages between two users (User1 and User2)
+router.get('/messages/:userId1/:userId2', auth, getMessages);
+
+// POST a new message (single route for message creation)
+router.post('/messages', auth, createMessage);
 
 module.exports = router;
+
