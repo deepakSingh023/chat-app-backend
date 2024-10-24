@@ -1,16 +1,41 @@
 const User = require('../models/User.js');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const fs = require('fs');
+const path = require('path');
+
+// Default profile picture
+const DEFAULT_PROFILE_PIC = 'default.jpeg';
 
 // Register a new user
 const register = async (req, res) => {
   try {
     const { username, password } = req.body;
+
+    
+    const existingUser = await User.findOne({ username });
+    if (existingUser) {
+      return res.status(400).json({ message: 'Username already exists' });
+    }
+
+    
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = new User({ username, password: hashedPassword });
+
+    // Create a new user with the default profile picture
+    const newUser = new User({
+      username,
+      password: hashedPassword,
+      profilePic: DEFAULT_PROFILE_PIC,
+      description: '' 
+    });
+
+    // Save the new user to the database
     await newUser.save();
+
+    // Respond with a success message
     res.status(201).json({ message: 'User registered successfully' });
   } catch (error) {
+    // Handle any errors during registration
     res.status(500).json({ message: 'Error registering user', error: error.message });
   }
 };
@@ -21,15 +46,32 @@ const login = async (req, res) => {
     const { username, password } = req.body;
     const user = await User.findOne({ username });
 
-    if (!user || !(await bcrypt.compare(password, user.password))) {
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
-    res.json({ token, user: { id: user._id, username: user.username } });
+    res.json({ token, user: { id: user._id, username: user.username, token:user.token} });
   } catch (error) {
     res.status(500).json({ message: 'Error logging in', error: error.message });
   }
+};
+
+// Middleware to verify JWT token
+const authenticateToken = (req, res, next) => {
+  const token = req.headers['authorization']?.split(' ')[1];
+  if (!token) return res.status(401).json({ message: 'Access token missing' });
+
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    if (err) return res.status(403).json({ message: 'Invalid token' });
+    req.user = user;
+    next();
+  });
 };
 
 // Send a friend request
@@ -38,22 +80,18 @@ const sendFriendRequest = async (req, res) => {
   const senderId = req.user.id; // Authenticated user ID from the middleware
 
   try {
-    // Find the receiver
     const receiver = await User.findById(receiverId);
     if (!receiver) {
       return res.status(404).json({ message: 'Receiver not found.' });
     }
 
-    // Check if the request already exists
     if (receiver.receivedFriendRequests.includes(senderId)) {
       return res.status(400).json({ message: 'Friend request already sent.' });
     }
 
-    // Add senderId to the receiver's receivedFriendRequests
     receiver.receivedFriendRequests.push(senderId);
     await receiver.save();
 
-    // Add receiverId to the sender's sentFriendRequests
     const sender = await User.findById(senderId);
     sender.sentFriendRequests.push(receiverId);
     await sender.save();
@@ -66,10 +104,9 @@ const sendFriendRequest = async (req, res) => {
 
 // Accept a friend request
 const acceptFriendRequest = async (req, res) => {
-  const { id } = req.body; // Extracting 'id' from req.body
-  const userId = req.user ? req.user.id : null; // Get authenticated user ID
+  const { id } = req.body;
+  const userId = req.user.id;
 
-  // Log the received id and userId
   console.log('Received friend request from sender ID:', id);
   console.log('Authenticated user ID:', userId);
 
@@ -86,16 +123,13 @@ const acceptFriendRequest = async (req, res) => {
       return res.status(404).json({ message: 'Sender not found.' });
     }
 
-    // Check if friend request exists
     if (!user.receivedFriendRequests.includes(sender._id)) {
       return res.status(400).json({ message: 'No friend request from this user.' });
     }
 
-    // Add to each other's friends list
     user.friends.push(sender._id);
     sender.friends.push(user._id);
 
-    // Remove the friend request from both users
     user.receivedFriendRequests.pull(sender._id);
     sender.sentFriendRequests.pull(user._id);
 
@@ -157,31 +191,28 @@ const searchUsers = async (req, res) => {
   }
 };
 
+// Reject a friend request
 const rejectRequest = async (req, res) => {
-  const { id } = req.body; // The 'id' is the sender's ID (request ID)
-  const userID = req.user.id; // The authenticated user's ID
+  const { id } = req.body;
+  const userID = req.user.id;
 
-  // If 'id' is not provided, return an error
   if (!id) {
     return res.status(400).json({ message: 'No request ID provided.' });
   }
 
   try {
-    const user = await User.findById(userID); // Authenticated user
-    const sender = await User.findById(id); // Sender (user who sent the friend request)
+    const user = await User.findById(userID);
+    const sender = await User.findById(id);
 
-    // Check if sender exists
     if (!sender) {
       console.log('Sender not found for ID:', id);
       return res.status(404).json({ message: 'Sender not found.' });
     }
 
-    // Check if the request exists in the receivedFriendRequests
     if (!user.receivedFriendRequests.includes(sender._id)) {
       return res.status(400).json({ message: 'No friend request from this user.' });
     }
 
-    // Remove the friend request from both users
     user.receivedFriendRequests.pull(sender._id);
     sender.sentFriendRequests.pull(user._id);
 
@@ -195,36 +226,40 @@ const rejectRequest = async (req, res) => {
   }
 };
 
-// Example route in your backend
+// Remove a friend
 const removeFriend = async (req, res) => {
   const { friendId } = req.body;
   const userId = req.user.id;
 
   try {
-      const user = await User.findById(userId);
-      const friend = await User.findById(friendId);
+    const user = await User.findById(userId);
+    const friend = await User.findById(friendId);
 
-      if (!friend) {
-          return res.status(404).json({ message: 'Friend not found.' });
-      }
+    if (!friend) {
+      return res.status(404).json({ message: 'Friend not found.' });
+    }
 
-      // Remove the friend from both users' friend lists
-      user.friends.pull(friend._id);
-      friend.friends.pull(user._id);
+    user.friends.pull(friend._id);
+    friend.friends.pull(user._id);
 
-      await user.save();
-      await friend.save();
+    await user.save();
+    await friend.save();
 
-      res.status(200).json({ message: 'Friend removed successfully.' });
+    res.status(200).json({ message: 'Friend removed successfully.' });
   } catch (error) {
-      res.status(500).json({ message: 'Error removing friend.', error: error.message });
+    res.status(500).json({ message: 'Error removing friend.', error: error.message });
   }
 };
 
-
-
-
-
-
-
-module.exports = { register, login, sendFriendRequest, acceptFriendRequest, getFriends, searchUsers, pendingRequest, rejectRequest, removeFriend };
+module.exports = {
+  register,
+  login,
+  sendFriendRequest,
+  acceptFriendRequest,
+  getFriends,
+  searchUsers,
+  pendingRequest,
+  rejectRequest,
+  removeFriend,
+  authenticateToken
+};

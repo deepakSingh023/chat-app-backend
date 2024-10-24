@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-require('dotenv').config(); // Load environment variables
+require('dotenv').config(); 
 
 const auth = (req, res, next) => {
   let token;
@@ -9,19 +9,19 @@ const auth = (req, res, next) => {
     token = req.headers.authorization.split(' ')[1]; // Extract the token after 'Bearer'
   }
 
-  // If no token was found, send an unauthorized response
+  
   if (!token) {
     return res.status(401).json({ message: 'Not authorized, no token' });
   }
 
   try {
-    // Verify the token
+    
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // Attach the user info (typically id) to the request object
+    
     req.user = { id: decoded.id };
 
-    // Proceed to the next middleware/controller
+  
     next();
   } catch (error) {
     console.error('Token verification error:', error);

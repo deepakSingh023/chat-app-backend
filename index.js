@@ -8,16 +8,20 @@ const http = require('http');
 const { Server } = require('socket.io');
 const Message = require('./models/Message');
 const User = require('./models/User'); // Assuming you have a User model
-
+const uploadRoutes = require('./routes/uploadRoutes')
 dotenv.config();
 connectDB();
+
+
 
 const app = express();
 const server = http.createServer(app);
 
+app.use(express.static('assets')); // Serve static files, including default profile picture
+
 const io = new Server(server, {
   cors: {
-    origin: 'http://localhost:3000', // In production, replace '*' with your frontend URL for security
+    origin: 'http://localhost:5173', // In production, replace '*' with your frontend URL for security
     methods: ["GET", "POST"],
   },
 });
@@ -33,7 +37,9 @@ app.use((req, res, next) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api', messageRoutes);
-
+app.use('/api/uploads',uploadRoutes);
+app.use('/uploads', express.static('uploads'));
+app.use('/assets', express.static('assets'));
 // Store connected users' socket IDs
 const users = {};
 
