@@ -62,18 +62,6 @@ const login = async (req, res) => {
   }
 };
 
-// Middleware to verify JWT token
-const authenticateToken = (req, res, next) => {
-  const token = req.headers['authorization']?.split(' ')[1];
-  if (!token) return res.status(401).json({ message: 'Access token missing' });
-
-  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-    if (err) return res.status(403).json({ message: 'Invalid token' });
-    req.user = user;
-    next();
-  });
-};
-
 // Send a friend request
 const sendFriendRequest = async (req, res) => {
   const { receiverId } = req.body; // Receiver ID from the request body
@@ -83,6 +71,14 @@ const sendFriendRequest = async (req, res) => {
     const receiver = await User.findById(receiverId);
     if (!receiver) {
       return res.status(404).json({ message: 'Receiver not found.' });
+    }
+
+    if (receiver.friends.includes(senderId)) {
+      return res.status(400).json({ message: 'You are already friends with this user.' });
+    }
+
+    if (senderId === receiverId) {
+      return res.status(400).json({ message: 'You cannot send a friend request to yourself.' });
     }
 
     if (receiver.receivedFriendRequests.includes(senderId)) {
@@ -261,5 +257,4 @@ module.exports = {
   pendingRequest,
   rejectRequest,
   removeFriend,
-  authenticateToken
 };

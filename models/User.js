@@ -8,7 +8,10 @@ const userSchema = new mongoose.Schema(
         sentFriendRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
         receivedFriendRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
         description: { type:String, default:" " },
-        profilepic: {type:String, default:'default.jpg'}
+        profilepic: {
+            url: String,
+            public_id: String
+          }
     },
     { timestamps: true } 
 );
