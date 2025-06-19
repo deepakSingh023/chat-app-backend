@@ -6,7 +6,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 cloudinary.config({
-  cloud_name: Process.env.YOUR_CLOUDINARY_NAME,
+  cloud_name: process.env.YOUR_CLOUDINARY_NAME,
   api_key: process.env.YOUR_CLOUDINARY_API_KEY,
   api_secret: process.env.YOUR_API_SECRET, // Ensure you have this in your .env file
 });
