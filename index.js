@@ -21,7 +21,7 @@ app.use(express.static('assets')); // Serve static files, including default prof
 
 const io = new Server(server, {
   cors: {
-    origin: 'http://localhost:5173', // In production, replace '*' with your frontend URL for security
+    origin: '*', // In production, replace '*' with your frontend URL for security
     methods: ["GET", "POST"],
   },
 });
