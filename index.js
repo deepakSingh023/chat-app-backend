@@ -1,4 +1,4 @@
-const express = require('express');
+/*const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const connectDB = require('./config/db');
@@ -115,4 +115,106 @@ io.on('connection', (socket) => {
 const PORT = 5000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+});*/
+
+
+
+const express = require('express');
+const cors = require('cors');
+const dotenv = require('dotenv');
+const connectDB = require('./config/db');
+const authRoutes = require('./routes/authRoutes');
+const messageRoutes = require('./routes/messageRoutes');
+const uploadRoutes = require('./routes/uploadRoutes');
+const http = require('http');
+const { Server } = require('socket.io');
+const Message = require('./models/Message');
+const jwt = require('jsonwebtoken');
+dotenv.config();
+connectDB();
+
+const app = express();
+const server = http.createServer(app);
+
+const io = new Server(server, {
+  cors: {
+    origin: 'http://localhost:5173',
+    methods: ['GET', 'POST'],
+  },
 });
+
+// Store socket mapping
+const users = {};
+
+app.use(cors());
+app.use(express.json());
+app.use('/api/auth', authRoutes);
+app.use('/api', messageRoutes);
+app.use('/api/uploads', uploadRoutes);
+app.use('/uploads', express.static('uploads'));
+app.use('/assets', express.static('assets'));
+
+app.use((req, res, next) => {
+  req.io = io;
+  next();
+});
+
+// Socket.IO setup
+io.on('connection', (socket) => {
+  console.log('🔗 Socket connected:', socket.id);
+
+  socket.on('registerUser', async (userId) => {
+    if (!users[userId]) users[userId] = [];
+    users[userId].push(socket.id);
+    console.log(`🧑 User ${userId} registered with socket ${socket.id}`);
+
+    const undelivered = await Message.find({ receiver: userId, delivered: false });
+    undelivered.forEach((msg) => {
+      socket.emit('receiveMessage', msg);
+      msg.delivered = true;
+      msg.save();
+    });
+  });
+
+  socket.on('sendMessage', async (msgData) => {
+    try {
+      const newMsg = new Message({
+        sender: msgData.senderId,
+        receiver: msgData.receiverId,
+        content: msgData.content,
+        timestamp: new Date(),
+      });
+      await newMsg.save();
+
+      const receiverSockets = users[msgData.receiverId];
+      if (receiverSockets && receiverSockets.length) {
+        receiverSockets.forEach((id) => {
+          io.to(id).emit('receiveMessage', newMsg);
+        });
+      } else {
+        console.log(`📭 Receiver ${msgData.receiverId} is offline`);
+      }
+    } catch (err) {
+      console.error('Send error:', err);
+      socket.emit('messageError', { error: 'Send failed' });
+    }
+  });
+
+  socket.on('disconnect', () => {
+    console.log('❌ Disconnected:', socket.id);
+    for (const [uid, sockets] of Object.entries(users)) {
+      users[uid] = sockets.filter((id) => id !== socket.id);
+      if (users[uid].length === 0) {
+        delete users[uid];
+        console.log(`🧑‍🦱 User ${uid} removed`);
+      }
+    }
+  });
+});
+
+// Start server
+const PORT = process.env.PORT || 5000;
+server.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
+
