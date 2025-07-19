@@ -1,6 +1,6 @@
 // middleware/upload.js
 const multer = require('multer');
-const { storage } = require('../cloudinary');
+const { storage } = require('../config/cloudinary');
 
 const fileFilter = (req, file, cb) => {
   const allowedTypes = [
@@ -9,8 +9,8 @@ const fileFilter = (req, file, cb) => {
     'image/webp',
     'application/pdf',
     'application/zip',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
-    'application/msword', // .doc
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/msword',
   ];
 
   if (allowedTypes.includes(file.mimetype)) {
