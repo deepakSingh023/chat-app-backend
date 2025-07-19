@@ -22,7 +22,7 @@ const getMessages = async (req, res) => {
 
 
 const createMessage = async (req, res) => {
-    const { senderId, receiverId, content } = req.body;
+    const { sender, receiver, content } = req.body;
 
     console.log('Message Body:', req.body);
 
@@ -36,8 +36,8 @@ const createMessage = async (req, res) => {
 
     try {
         const newMessage = new Message({
-            sender: senderId,
-            receiver: receiverId,
+            sender: sender,
+            receiver: receiver,
             content: content || '', // Allow file-only messages
             fileUrl,
             fileName,
