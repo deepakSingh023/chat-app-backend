@@ -208,35 +208,53 @@ io.on('connection', (socket) => {
 
   // Handle message sending (text or file or both)
   socket.on('sendMessage', async (messageData) => {
-    try {
-      const newMessage = new Message({
-        sender: messageData.sender,
-        receiver: messageData.receiver,
-        content: messageData.content || '',
-        fileUrl: messageData.fileUrl || '',
-        fileName: messageData.fileName || '',
-        delivered: false,
+  try {
+    let fileUrl = '';
+    let fileName = '';
+
+    // Upload file to Cloudinary if fileData exists
+    if (messageData.fileData && messageData.fileName) {
+      const uploadResponse = await cloudinary.uploader.upload(
+        `data:${messageData.fileType};base64,${messageData.fileData}`,
+        {
+          folder: 'chat_uploads',
+          resource_type: 'auto',
+          public_id: `${Date.now()}-${messageData.fileName}`,
+        }
+      );
+
+      fileUrl = uploadResponse.secure_url;
+      fileName = messageData.fileName;
+    }
+
+    const newMessage = new Message({
+      sender: messageData.sender,
+      receiver: messageData.receiver,
+      content: messageData.content || '',
+      fileUrl,
+      fileName,
+      delivered: false,
+    });
+
+    await newMessage.save();
+
+    const recipientSocketIds = users[messageData.receiverId];
+
+    if (recipientSocketIds && recipientSocketIds.length > 0) {
+      recipientSocketIds.forEach((socketId) => {
+        io.to(socketId).emit('receiveMessage', newMessage);
       });
 
+      newMessage.delivered = true;
       await newMessage.save();
-
-      const recipientSocketIds = users[messageData.receiverId];
-
-      if (recipientSocketIds && recipientSocketIds.length > 0) {
-        recipientSocketIds.forEach((socketId) => {
-          io.to(socketId).emit('receiveMessage', newMessage);
-        });
-
-        newMessage.delivered = true;
-        await newMessage.save();
-      } else {
-        console.log(`📭 Recipient ${messageData.receiverId} is offline`);
-      }
-    } catch (error) {
-      console.error('❌ Error sending message:', error);
-      socket.emit('messageError', { error: 'Could not send message' });
+    } else {
+      console.log(`📭 Recipient ${messageData.receiverId} is offline`);
     }
-  });
+  } catch (error) {
+    console.error('❌ Error sending message:', error);
+    socket.emit('messageError', { error: 'Could not send message' });
+  }
+});
 
   socket.on('disconnect', () => {
     console.log('🔌 A user disconnected:', socket.id);

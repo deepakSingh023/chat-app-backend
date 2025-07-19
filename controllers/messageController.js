@@ -1,6 +1,6 @@
 const Message = require('../models/Message'); 
 const jwt = require('jsonwebtoken');
-
+const cloudinary = require('./cloudinary');
 const getMessages = async (req, res) => {
     const { userId1, userId2 } = req.params; 
     console.log('Fetching messages between:', userId1, userId2); // Log user IDs
@@ -31,12 +31,21 @@ const createMessage = async (req, res) => {
   let fileUrl = '';
   let fileName = '';
 
-  if (req.file) {
-    fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
-    fileName = req.file.originalname;
-  }
-
   try {
+    // Upload file to Cloudinary if exists
+    if (req.file) {
+      const result = await cloudinary.uploader.upload(req.file.path, {
+        folder: 'chat_uploads',
+        resource_type: 'auto', // handles both images & other files
+      });
+
+      fileUrl = result.secure_url;
+      fileName = req.file.originalname;
+
+      // Delete local temp file
+      fs.unlinkSync(req.file.path);
+    }
+
     const newMessage = new Message({
       sender,
       receiver,
@@ -47,7 +56,7 @@ const createMessage = async (req, res) => {
 
     await newMessage.save();
 
-    // Broadcast to receiver
+    // Emit real-time message
     if (req.io) {
       req.io.to(receiver).emit('receiveMessage', newMessage);
     }
