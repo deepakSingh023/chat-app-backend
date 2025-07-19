@@ -210,8 +210,8 @@ io.on('connection', (socket) => {
   socket.on('sendMessage', async (messageData) => {
     try {
       const newMessage = new Message({
-        sender: messageData.senderId,
-        receiver: messageData.receiverId,
+        sender: messageData.sender,
+        receiver: messageData.receiver,
         content: messageData.content || '',
         fileUrl: messageData.fileUrl || '',
         fileName: messageData.fileName || '',
