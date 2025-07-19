@@ -163,37 +163,20 @@ app.use('/api/auth', authRoutes);
 app.use('/api', messageRoutes);
 app.use('/api/uploads', uploadRoutes);
 
-// In-memory user-to-socket mapping
-const users = {};
-
 // === SOCKET.IO ===
+const users = {}; // { userId: [socketId, ...] }
+
 io.on('connection', (socket) => {
-  console.log('🔗 A user connected:', socket.id);
+  console.log('🔗 Connected:', socket.id);
 
   socket.on('registerUser', async (userId) => {
     users[userId] = users[userId] || [];
     users[userId].push(socket.id);
     console.log(`✅ Registered user ${userId}`);
-
-    // Send undelivered messages
-    try {
-      const undeliveredMessages = await Message.find({
-        receiver: userId,
-        delivered: false,
-      }).populate('sender', 'username');
-
-      for (const msg of undeliveredMessages) {
-        socket.emit('receiveMessage', msg);
-        msg.delivered = true;
-        await msg.save();
-      }
-    } catch (err) {
-      console.error('❌ Error delivering messages:', err);
-    }
   });
 
-  socket.on('checkOnline', (friendId) => {
-    const isOnline = !!users[friendId];
+  socket.on('userOnline', (friendId) => {
+    const isOnline = !!(users[friendId] && users[friendId].length > 0);
     socket.emit('onlineStatus', isOnline);
   });
 
@@ -228,16 +211,17 @@ io.on('connection', (socket) => {
 
       const recipientSocketIds = users[messageData.receiver];
       if (recipientSocketIds && recipientSocketIds.length > 0) {
-        recipientSocketIds.forEach((socketId) =>
+        recipientSocketIds.forEach(socketId =>
           io.to(socketId).emit('receiveMessage', newMessage)
         );
         newMessage.delivered = true;
         await newMessage.save();
       } else {
-        console.log(`📭 Recipient ${messageData.receiver} is offline`);
+        console.log(`📭 Receiver ${messageData.receiver} offline. Message saved.`);
+        // Nothing to do here; fetch on load will pick this.
       }
     } catch (error) {
-      console.error('❌ Socket message upload error:', error);
+      console.error('❌ Message error:', error);
       socket.emit('messageError', { error: 'Message failed' });
     }
   });
@@ -252,8 +236,4 @@ io.on('connection', (socket) => {
       }
     }
   });
-});
-
-server.listen(process.env.PORT || 5000, () => {
-  console.log('🚀 Server running');
 });
