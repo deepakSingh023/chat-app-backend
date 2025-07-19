@@ -24,6 +24,8 @@ const getMessages = async (req, res) => {
 const createMessage = async (req, res) => {
     const { senderId, receiverId, content } = req.body;
 
+    console.log('Message Body:', req.body);
+
     // File handling via multer
     let fileUrl = '';
     let fileName = '';
