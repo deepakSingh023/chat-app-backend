@@ -1,6 +1,7 @@
 const express = require('express');
 const { getMessages, createMessage } = require('../controllers/messageController.js');
 const auth = require('../middleware/authMiddleware.js');
+const upload = require('../middleware/upload');
 
 const router = express.Router();
 
