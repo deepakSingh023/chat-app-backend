@@ -23,6 +23,10 @@ const getMessages = async (req, res) => {
 
 const createMessage = async (req, res) => {
     const { sender, receiver, content } = req.body;
+    if (!sender || !receiver) {
+    return res.status(400).json({ error: 'Sender and receiver are required' });
+}
+
 
     console.log('Message Body:', req.body);
 
@@ -46,7 +50,8 @@ const createMessage = async (req, res) => {
         await newMessage.save();
 
         // Emit the message via Socket.IO
-        req.io.to(receiverId).emit('receiveMessage', newMessage); // Optionally use room-based emit
+        req.io.to(receiver).emit('receiveMessage', newMessage);
+
 
         res.status(201).json(newMessage);
     } catch (error) {

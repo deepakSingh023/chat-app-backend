@@ -149,7 +149,11 @@ app.use(cors({
   methods: ['GET', 'POST'],
   credentials: true,
 }));
+
+
+
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(express.static('assets'));
 app.use('/uploads', express.static('uploads'));
 app.use('/assets', express.static('assets'));
