@@ -1,6 +1,6 @@
 // controllers/messageController.js
 const Message = require('../models/Message');
-const { cloudinary } = require('../config/cloudinary');
+const { cloudinary } = require('../cloudinary');
 
 const getMessages = async (req, res) => {
   const { userId1, userId2 } = req.params;
