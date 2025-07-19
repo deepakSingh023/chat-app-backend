@@ -128,7 +128,6 @@ const uploadRoutes = require('./routes/uploadRoutes');
 const http = require('http');
 const { Server } = require('socket.io');
 const Message = require('./models/Message');
-const User = require('./models/User');
 
 dotenv.config();
 connectDB();
@@ -138,7 +137,7 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: ['https://talkcy.netlify.app', 'http://localhost:5173'], // ✅ allow production and local dev
+    origin: ['https://talkcy.netlify.app', 'http://localhost:5173'],
     methods: ['GET', 'POST'],
     credentials: true,
   },
@@ -150,13 +149,12 @@ app.use(cors({
   methods: ['GET', 'POST'],
   credentials: true,
 }));
-
 app.use(express.json());
-app.use(express.static('assets')); // Serve static files (e.g., profile pictures)
+app.use(express.static('assets'));
 app.use('/uploads', express.static('uploads'));
 app.use('/assets', express.static('assets'));
 
-// Socket instance accessible in routes if needed
+// Attach Socket.io to req
 app.use((req, res, next) => {
   req.io = io;
   next();
@@ -174,7 +172,7 @@ const users = {};
 io.on('connection', (socket) => {
   console.log('🔗 A user connected:', socket.id);
 
-  // Register user on connection
+  // Register the user with socket
   socket.on('registerUser', async (userId) => {
     if (!users[userId]) {
       users[userId] = [];
@@ -186,28 +184,36 @@ io.on('connection', (socket) => {
       const undeliveredMessages = await Message.find({
         receiver: userId,
         delivered: false,
-      });
+      }).populate('sender', 'username');
 
-      // Emit and mark messages as delivered safely
       for (const msg of undeliveredMessages) {
         socket.emit('receiveMessage', msg);
         msg.delivered = true;
-        await msg.save(); // ✅ awaited to avoid duplicates
+        await msg.save();
       }
     } catch (error) {
       console.error('❌ Error delivering undelivered messages:', error);
     }
   });
 
-  // Handle message sending
+  // Check if friend is online
+  socket.on('checkOnline', (friendId) => {
+    const isOnline = !!users[friendId];
+    socket.emit('onlineStatus', isOnline);
+  });
+
+  // Handle message sending (text or file or both)
   socket.on('sendMessage', async (messageData) => {
     try {
       const newMessage = new Message({
         sender: messageData.senderId,
         receiver: messageData.receiverId,
-        content: messageData.content,
+        content: messageData.content || '',
+        fileUrl: messageData.fileUrl || '',
+        fileName: messageData.fileName || '',
         delivered: false,
       });
+
       await newMessage.save();
 
       const recipientSocketIds = users[messageData.receiverId];
@@ -217,7 +223,6 @@ io.on('connection', (socket) => {
           io.to(socketId).emit('receiveMessage', newMessage);
         });
 
-        // Mark as delivered immediately since recipient is online
         newMessage.delivered = true;
         await newMessage.save();
       } else {
@@ -225,22 +230,25 @@ io.on('connection', (socket) => {
       }
     } catch (error) {
       console.error('❌ Error sending message:', error);
-      socket.emit('messageError', { error: 'Could not send message, please try again' });
+      socket.emit('messageError', { error: 'Could not send message' });
     }
   });
 
-  // Handle disconnect
   socket.on('disconnect', () => {
     console.log('🔌 A user disconnected:', socket.id);
-
     for (const [userId, socketIds] of Object.entries(users)) {
-      users[userId] = socketIds.filter((id) => id !== socket.id);
+      users[userId] = socketIds.filter(id => id !== socket.id);
       if (users[userId].length === 0) {
         delete users[userId];
         console.log(`🛑 User ${userId} removed from online list`);
       }
     }
   });
+});
+
+// Optional route to check online users (for admin/dev/debug)
+app.get('/api/online-users', (req, res) => {
+  res.json(Object.keys(users));
 });
 
 // Start server

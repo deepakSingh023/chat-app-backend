@@ -14,11 +14,11 @@ cloudinary.config({
 // Multer storage engine for Cloudinary
 const storage = new CloudinaryStorage({
   cloudinary,
-  params: {
-    folder: 'profile_pics',            // your folder in Cloudinary
-    allowed_formats: ['jpg', 'png'],   // restrict formats
-    transformation: [{ width: 500, crop: 'limit' }],
-  },
+  params: async (req, file) => ({
+    folder: 'chat_uploads',
+    resource_type: 'auto', // <-- VERY IMPORTANT for non-images (pdf, zip)
+    public_id: Date.now() + '-' + file.originalname,
+  }),
 });
 
 export { cloudinary, storage };

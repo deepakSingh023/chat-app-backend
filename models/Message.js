@@ -13,11 +13,19 @@ const messageSchema = new mongoose.Schema({
   },
   content: {
     type: String,
-    required: true,
+    default: '', // Make optional if sending only files
+  },
+  fileUrl: {
+    type: String,
+    default: '',
+  },
+  fileName: {
+    type: String,
+    default: '',
   },
   delivered: {
     type: Boolean,
-    default: false, // Tracks if the message has been delivered
+    default: false,
   },
   timestamp: {
     type: Date,

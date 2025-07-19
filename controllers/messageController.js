@@ -23,13 +23,28 @@ const getMessages = async (req, res) => {
 
 const createMessage = async (req, res) => {
     const { senderId, receiverId, content } = req.body;
+
+    // File handling via multer
+    let fileUrl = '';
+    let fileName = '';
+    if (req.file) {
+        fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+        fileName = req.file.originalname;
+    }
+
     try {
-        const newMessage = new Message({ sender: senderId, receiver: receiverId, content });
+        const newMessage = new Message({
+            sender: senderId,
+            receiver: receiverId,
+            content: content || '', // Allow file-only messages
+            fileUrl,
+            fileName,
+        });
+
         await newMessage.save();
 
-        console.log('Emitting message:', newMessage); 
-
-        req.io.emit('receiveMessage', newMessage);
+        // Emit the message via Socket.IO
+        req.io.to(receiverId).emit('receiveMessage', newMessage); // Optionally use room-based emit
 
         res.status(201).json(newMessage);
     } catch (error) {
