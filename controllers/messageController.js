@@ -22,43 +22,43 @@ const getMessages = async (req, res) => {
 
 
 const createMessage = async (req, res) => {
-    const { sender, receiver, content } = req.body;
-    if (!sender || !receiver) {
-    return res.status(400).json({ error: 'Sender and receiver are required' });
-}
+  const { sender, receiver, content } = req.body;
 
+  if (!sender || !receiver) {
+    return res.status(400).send('Sender and receiver are required');
+  }
 
-    console.log('Message Body:', req.body);
+  let fileUrl = '';
+  let fileName = '';
 
-    // File handling via multer
-    let fileUrl = '';
-    let fileName = '';
-    if (req.file) {
-        fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
-        fileName = req.file.originalname;
+  if (req.file) {
+    fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+    fileName = req.file.originalname;
+  }
+
+  try {
+    const newMessage = new Message({
+      sender,
+      receiver,
+      content: content || '',
+      fileUrl,
+      fileName,
+    });
+
+    await newMessage.save();
+
+    // Broadcast to receiver
+    if (req.io) {
+      req.io.to(receiver).emit('receiveMessage', newMessage);
     }
 
-    try {
-        const newMessage = new Message({
-            sender: sender,
-            receiver: receiver,
-            content: content || '', // Allow file-only messages
-            fileUrl,
-            fileName,
-        });
-
-        await newMessage.save();
-
-        // Emit the message via Socket.IO
-        req.io.to(receiver).emit('receiveMessage', newMessage);
-
-
-        res.status(201).json(newMessage);
-    } catch (error) {
-        console.error(error);
-        res.status(500).send('Server error');
-    }
+    res.status(201).json(newMessage);
+  } catch (error) {
+    console.error(error);
+    res.status(500).send('Server error');
+  }
 };
+
 
 
 module.exports = { getMessages, createMessage };
