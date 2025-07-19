@@ -129,7 +129,7 @@ const uploadRoutes = require('./routes/uploadRoutes');
 const http = require('http');
 const { Server } = require('socket.io');
 const Message = require('./models/Message');
-const { cloudinary } = require('./config/cloudinary');
+const { cloudinary } = require('./cloudinary');
 
 dotenv.config();
 connectDB();

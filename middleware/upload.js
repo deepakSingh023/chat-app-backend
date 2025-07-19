@@ -1,6 +1,6 @@
 // middleware/upload.js
 const multer = require('multer');
-const { storage } = require('../config/cloudinary');
+const { storage } = require('../cloudinary');
 
 const fileFilter = (req, file, cb) => {
   const allowedTypes = [
