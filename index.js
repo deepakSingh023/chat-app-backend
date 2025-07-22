@@ -52,7 +52,7 @@ io.on('connection', (socket) => {
     socket.on('registerUser', async (userId) => {
         users[userId] = users[userId] || [];
         users[userId].push(socket.id);
-        socket.userId = userId; // Store userId on socket for easier access
+        socket.userId = userId;
         console.log(`✅ Registered user ${userId} with socket ${socket.id}`);
         
         // Notify all friends that this user came online
@@ -97,10 +97,39 @@ io.on('connection', (socket) => {
     // Handle message sending
     socket.on('sendMessage', async (messageData) => {
         try {
+            console.log('📨 Received message data:', messageData);
+
+            // For messages that already exist (sent via API), just broadcast them
+            if (messageData._id) {
+                // This is a message that was already saved via the API route
+                // We just need to broadcast it to the room
+                
+                const messageToSend = {
+                    ...messageData,
+                    sender: messageData.sender || { _id: messageData.sender, username: 'User' },
+                    receiver: messageData.receiver || { _id: messageData.receiver, username: 'User' }
+                };
+
+                if (messageData.roomId) {
+                    // Send to room (excluding sender)
+                    socket.to(messageData.roomId).emit('receiveMessage', messageToSend);
+                    console.log(`📨 Broadcasting existing message to room ${messageData.roomId}`);
+                } else {
+                    // Fallback to direct socket messaging
+                    const recipientSocketIds = users[messageData.receiver] || users[messageData.receiver._id];
+                    if (recipientSocketIds && recipientSocketIds.length > 0) {
+                        recipientSocketIds.forEach(socketId => {
+                            io.to(socketId).emit('receiveMessage', messageToSend);
+                        });
+                        console.log(`📨 Sent existing message to ${recipientSocketIds.length} recipient sockets`);
+                    }
+                }
+                return;
+            }
+
+            // Handle file upload if present (legacy support)
             let fileUrl = '';
             let fileName = '';
-
-            // Handle file upload if present
             if (messageData.fileData && messageData.fileName) {
                 const uploadResponse = await cloudinary.uploader.upload(
                     `data:${messageData.fileType};base64,${messageData.fileData}`,
@@ -114,7 +143,7 @@ io.on('connection', (socket) => {
                 fileName = messageData.fileName;
             }
 
-            // Create and save message
+            // Create new message (legacy support)
             const newMessage = new Message({
                 sender: messageData.sender,
                 receiver: messageData.receiver,
@@ -125,25 +154,18 @@ io.on('connection', (socket) => {
             });
 
             await newMessage.save();
-
-            // Populate sender info for frontend
             await newMessage.populate('sender', 'username email');
             await newMessage.populate('receiver', 'username email');
 
-            // Send to specific room if provided (new method)
+            // Send to room or specific sockets
             if (messageData.roomId) {
                 socket.to(messageData.roomId).emit('receiveMessage', newMessage);
-                console.log(`📨 Message sent to room ${messageData.roomId}`);
             } else {
-                // Fallback to old method - send to specific user sockets
                 const recipientSocketIds = users[messageData.receiver];
                 if (recipientSocketIds && recipientSocketIds.length > 0) {
                     recipientSocketIds.forEach(socketId => {
                         io.to(socketId).emit('receiveMessage', newMessage);
                     });
-                    console.log(`📨 Message sent to ${recipientSocketIds.length} recipient sockets`);
-                } else {
-                    console.log(`📭 Receiver ${messageData.receiver} offline. Message saved.`);
                 }
             }
 
@@ -191,10 +213,6 @@ io.on('connection', (socket) => {
 
     // Broadcast user online/offline status to their friends
     function broadcastUserStatus(userId, isOnline) {
-        // This is a simplified version - you might want to implement a friends system
-        // to only notify actual friends rather than all users
-        
-        // For now, we'll emit to all connected sockets except the user themselves
         socket.broadcast.emit('userStatusUpdate', {
             userId: userId,
             isOnline: isOnline
@@ -204,12 +222,12 @@ io.on('connection', (socket) => {
     }
 });
 
-// Helper function to get online users (useful for debugging)
+// Helper function to get online users
 function getOnlineUsers() {
     return Object.keys(users);
 }
 
-// Add this endpoint for debugging purposes
+// Debug endpoint
 app.get('/api/debug/online-users', (req, res) => {
     res.json({
         onlineUsers: getOnlineUsers(),
