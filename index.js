@@ -1,124 +1,3 @@
-// const express = require('express');
-// const cors = require('cors');
-// const dotenv = require('dotenv');
-// const connectDB = require('./config/db');
-// const authRoutes = require('./routes/authRoutes');
-// const messageRoutes = require('./routes/messageRoutes');
-// const http = require('http');
-// const { Server } = require('socket.io');
-// const Message = require('./models/Message');
-// const User = require('./models/User'); // Assuming you have a User model
-// const uploadRoutes = require('./routes/uploadRoutes')
-// dotenv.config();
-// connectDB();
-
-
-
-// const app = express();
-// const server = http.createServer(app);
-
-// app.use(express.static('assets')); // Serve static files, including default profile picture
-
-// const io = new Server(server, {
-//   cors: {
-//     origin: 'https://talkcy.netlify.app', // In production, replace '*' with your frontend URL for security
-//     methods: ["GET", "POST"],
-//   },
-// });
-
-// app.use(cors());
-// app.use(express.json());
-
-// app.use((req, res, next) => {
-//   req.io = io; // Attach io instance to request object
-//   next();
-// });
-
-
-// app.use('/api/auth', authRoutes);
-// app.use('/api', messageRoutes);
-// app.use('/api/uploads',uploadRoutes);
-// app.use('/uploads', express.static('uploads'));
-// app.use('/assets', express.static('assets'));
-// // Store connected users' socket IDs
-// const users = {};
-
-
-
-// // Listen for connections
-// io.on('connection', (socket) => {
-//   console.log('A user connected:', socket.id);
-
-//   // Register a user when they connect
-//   socket.on('registerUser', async (userId) => {
-//     if (!users[userId]) {
-//       users[userId] = [];
-//     }
-//     users[userId].push(socket.id);
-//     console.log(`User ${userId} connected with socket ID: ${socket.id}`);
-
-//     // When a user reconnects, deliver any undelivered messages
-//     const undeliveredMessages = await Message.find({
-//       receiver: userId,
-//       delivered: false,
-//     });
-
-//     undeliveredMessages.forEach((msg) => {
-//       socket.emit('receiveMessage', msg); // Deliver undelivered messages
-//       msg.delivered = true;
-//       msg.save(); // Mark message as delivered
-//     });
-//   });
-
-//   // Handle message sending
-//   socket.on('sendMessage', async (messageData) => {
-//     try {
-//       // Save the message to the database
-//       const newMessage = new Message({
-//         sender: messageData.senderId,
-//         receiver: messageData.receiverId,
-//         content: messageData.content,
-//       });
-//       await newMessage.save();
-
-//       // Broadcast the message to all connected sockets of the recipient
-//       const recipientSocketIds = users[messageData.receiverId];
-//       if (recipientSocketIds && recipientSocketIds.length > 0) {
-//         recipientSocketIds.forEach((socketId) => {
-//           io.to(socketId).emit('receiveMessage', newMessage);
-//         });
-//       } else {
-//         console.log(`Recipient ${messageData.receiverId} is offline. Message saved for later.`);
-//       }
-//     } catch (error) {
-//       console.error('Error sending message:', error);
-//       socket.emit('messageError', { error: 'Could not send message, please try again' });
-//     }
-//   });
-
-//   // Handle disconnect
-//   socket.on('disconnect', () => {
-//     console.log('A user disconnected:', socket.id);
-
-//     // Remove the disconnected socket ID from the user's list of connections
-//     for (const [userId, socketIds] of Object.entries(users)) {
-//       users[userId] = socketIds.filter((id) => id !== socket.id);
-//       if (users[userId].length === 0) {
-//         delete users[userId];
-//         console.log(`User ${userId} disconnected from all devices`);
-//       }
-//     }
-//   });
-// });
-
-// // Start the server
-// const PORT = 5000;
-// server.listen(PORT, () => {
-//   console.log(`Server running on port ${PORT}`);
-// });
-
-
-// index.js
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
@@ -136,27 +15,26 @@ connectDB();
 
 const app = express();
 const server = http.createServer(app);
-
 const io = new Server(server, {
-  cors: {
-    origin: ['https://talkcy.netlify.app', 'http://localhost:5173'],
-    methods: ['GET', 'POST'],
-    credentials: true,
-  },
+    cors: {
+        origin: ['https://talkcy.netlify.app', 'http://localhost:5173'],
+        methods: ['GET', 'POST'],
+        credentials: true,
+    },
 });
 
 app.use(cors({
-  origin: ['https://talkcy.netlify.app', 'http://localhost:5173'],
-  methods: ['GET', 'POST'],
-  credentials: true,
+    origin: ['https://talkcy.netlify.app', 'http://localhost:5173'],
+    methods: ['GET', 'POST'],
+    credentials: true,
 }));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use((req, res, next) => {
-  req.io = io;
-  next();
+    req.io = io;
+    next();
 });
 
 app.use('/api/auth', authRoutes);
@@ -165,82 +43,181 @@ app.use('/api/uploads', uploadRoutes);
 
 // === SOCKET.IO ===
 const users = {}; // { userId: [socketId, ...] }
+const userRooms = {}; // { socketId: [roomId, ...] }
 
 io.on('connection', (socket) => {
-  console.log('🔗 Connected:', socket.id);
+    console.log('🔗 Connected:', socket.id);
 
-  socket.on('registerUser', async (userId) => {
-    users[userId] = users[userId] || [];
-    users[userId].push(socket.id);
-    console.log(`✅ Registered user ${userId}`);
-  });
+    // Register user
+    socket.on('registerUser', async (userId) => {
+        users[userId] = users[userId] || [];
+        users[userId].push(socket.id);
+        socket.userId = userId; // Store userId on socket for easier access
+        console.log(`✅ Registered user ${userId} with socket ${socket.id}`);
+        
+        // Notify all friends that this user came online
+        broadcastUserStatus(userId, true);
+    });
 
-  socket.on('userOnline', (friendId) => {
-    const isOnline = !!(users[friendId] && users[friendId].length > 0);
-    socket.emit('onlineStatus', isOnline);
-  });
+    // Join chat room
+    socket.on('joinRoom', (roomId) => {
+        socket.join(roomId);
+        userRooms[socket.id] = userRooms[socket.id] || [];
+        if (!userRooms[socket.id].includes(roomId)) {
+            userRooms[socket.id].push(roomId);
+        }
+        console.log(`👥 Socket ${socket.id} joined room ${roomId}`);
+    });
 
-  socket.on('sendMessage', async (messageData) => {
-    try {
-      let fileUrl = '';
-      let fileName = '';
+    // Leave chat room
+    socket.on('leaveRoom', (roomId) => {
+        socket.leave(roomId);
+        if (userRooms[socket.id]) {
+            userRooms[socket.id] = userRooms[socket.id].filter(room => room !== roomId);
+            if (userRooms[socket.id].length === 0) {
+                delete userRooms[socket.id];
+            }
+        }
+        console.log(`👋 Socket ${socket.id} left room ${roomId}`);
+    });
 
-      if (messageData.fileData && messageData.fileName) {
-        const uploadResponse = await cloudinary.uploader.upload(
-          `data:${messageData.fileType};base64,${messageData.fileData}`,
-          {
-            folder: 'chat_uploads',
-            resource_type: 'auto',
-            public_id: `${Date.now()}-${messageData.fileName}`,
-          }
-        );
-        fileUrl = uploadResponse.secure_url;
-        fileName = messageData.fileName;
-      }
+    // Check if user is online
+    socket.on('checkUserOnline', (userId) => {
+        const isOnline = !!(users[userId] && users[userId].length > 0);
+        socket.emit('userOnlineStatus', { userId, isOnline });
+        console.log(`🔍 Checking online status for ${userId}: ${isOnline}`);
+    });
 
-      const newMessage = new Message({
-        sender: messageData.sender,
-        receiver: messageData.receiver,
-        content: messageData.content || '',
-        fileUrl,
-        fileName,
-        delivered: false,
-      });
+    // Legacy support for old frontend
+    socket.on('userOnline', (friendId) => {
+        const isOnline = !!(users[friendId] && users[friendId].length > 0);
+        socket.emit('onlineStatus', isOnline);
+    });
 
-      await newMessage.save();
+    // Handle message sending
+    socket.on('sendMessage', async (messageData) => {
+        try {
+            let fileUrl = '';
+            let fileName = '';
 
-      const recipientSocketIds = users[messageData.receiver];
-      if (recipientSocketIds && recipientSocketIds.length > 0) {
-        recipientSocketIds.forEach(socketId =>
-          io.to(socketId).emit('receiveMessage', newMessage)
-        );
-        newMessage.delivered = true;
-        await newMessage.save();
-      } else {
-        console.log(`📭 Receiver ${messageData.receiver} offline. Message saved.`);
-        // Nothing to do here; fetch on load will pick this.
-      }
-    } catch (error) {
-      console.error('❌ Message error:', error);
-      socket.emit('messageError', { error: 'Message failed' });
+            // Handle file upload if present
+            if (messageData.fileData && messageData.fileName) {
+                const uploadResponse = await cloudinary.uploader.upload(
+                    `data:${messageData.fileType};base64,${messageData.fileData}`,
+                    {
+                        folder: 'chat_uploads',
+                        resource_type: 'auto',
+                        public_id: `${Date.now()}-${messageData.fileName}`,
+                    }
+                );
+                fileUrl = uploadResponse.secure_url;
+                fileName = messageData.fileName;
+            }
+
+            // Create and save message
+            const newMessage = new Message({
+                sender: messageData.sender,
+                receiver: messageData.receiver,
+                content: messageData.content || '',
+                fileUrl,
+                fileName,
+                delivered: false,
+            });
+
+            await newMessage.save();
+
+            // Populate sender info for frontend
+            await newMessage.populate('sender', 'username email');
+            await newMessage.populate('receiver', 'username email');
+
+            // Send to specific room if provided (new method)
+            if (messageData.roomId) {
+                socket.to(messageData.roomId).emit('receiveMessage', newMessage);
+                console.log(`📨 Message sent to room ${messageData.roomId}`);
+            } else {
+                // Fallback to old method - send to specific user sockets
+                const recipientSocketIds = users[messageData.receiver];
+                if (recipientSocketIds && recipientSocketIds.length > 0) {
+                    recipientSocketIds.forEach(socketId => {
+                        io.to(socketId).emit('receiveMessage', newMessage);
+                    });
+                    console.log(`📨 Message sent to ${recipientSocketIds.length} recipient sockets`);
+                } else {
+                    console.log(`📭 Receiver ${messageData.receiver} offline. Message saved.`);
+                }
+            }
+
+            // Mark as delivered if recipient is online
+            const recipientOnline = users[messageData.receiver] && users[messageData.receiver].length > 0;
+            if (recipientOnline) {
+                newMessage.delivered = true;
+                await newMessage.save();
+            }
+
+        } catch (error) {
+            console.error('❌ Message error:', error);
+            socket.emit('messageError', { error: 'Message failed to send' });
+        }
+    });
+
+    // Handle disconnection
+    socket.on('disconnect', () => {
+        console.log('🔌 Disconnected:', socket.id);
+        
+        let disconnectedUserId = null;
+
+        // Remove socket from users object
+        for (const [userId, socketIds] of Object.entries(users)) {
+            const originalLength = socketIds.length;
+            users[userId] = socketIds.filter(id => id !== socket.id);
+            
+            if (originalLength > users[userId].length) {
+                disconnectedUserId = userId;
+            }
+            
+            if (users[userId].length === 0) {
+                delete users[userId];
+                console.log(`🛑 ${userId} offline`);
+                // Notify friends that user went offline
+                broadcastUserStatus(userId, false);
+            }
+        }
+
+        // Clean up user rooms
+        if (userRooms[socket.id]) {
+            delete userRooms[socket.id];
+        }
+    });
+
+    // Broadcast user online/offline status to their friends
+    function broadcastUserStatus(userId, isOnline) {
+        // This is a simplified version - you might want to implement a friends system
+        // to only notify actual friends rather than all users
+        
+        // For now, we'll emit to all connected sockets except the user themselves
+        socket.broadcast.emit('userStatusUpdate', {
+            userId: userId,
+            isOnline: isOnline
+        });
+        
+        console.log(`📡 Broadcasted status update: ${userId} is ${isOnline ? 'online' : 'offline'}`);
     }
-  });
+});
 
-  socket.on('disconnect', () => {
-    console.log('🔌 Disconnected:', socket.id);
-    for (const [userId, socketIds] of Object.entries(users)) {
-      users[userId] = socketIds.filter(id => id !== socket.id);
-      if (users[userId].length === 0) {
-        delete users[userId];
-        console.log(`🛑 ${userId} offline`);
-      }
-    }
-  });
+// Helper function to get online users (useful for debugging)
+function getOnlineUsers() {
+    return Object.keys(users);
+}
+
+// Add this endpoint for debugging purposes
+app.get('/api/debug/online-users', (req, res) => {
+    res.json({
+        onlineUsers: getOnlineUsers(),
+        totalConnections: Object.values(users).reduce((sum, sockets) => sum + sockets.length, 0)
+    });
 });
 
 const PORT = process.env.PORT || 3000;
-
 server.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`🚀 Server running on port ${PORT}`);
 });
-
