@@ -152,6 +152,7 @@ const pendingRequest = async (req, res) => {
       userId: request._id,
       username: request.username,
     }));
+    console.log(pendingRequests);
 
     res.json({ pendingRequests });
   } catch (error) {
