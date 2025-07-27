@@ -250,8 +250,8 @@ const removeFriend = async (req, res) => {
 const getUserInfo = async(req,res)=>{
 
   try {
-        const { userId } = req.params;
-        const user = await User.findById(userId).select('username _id'); // Only return username and id
+        const { friendId } = req.params;
+        const user = await User.findById(friendId).select('username _id'); // Only return username and id
         
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
