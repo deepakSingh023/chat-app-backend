@@ -256,6 +256,7 @@ const getUserInfo = async(req,res)=>{
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
         }
+        console.log(user);
         
         res.json(user);
     } catch (error) {
