@@ -1,5 +1,5 @@
 const express = require('express');
-const { register, login, sendFriendRequest, acceptFriendRequest, getFriends, searchUsers, pendingRequest, rejectRequest, removeFriend } = require('../controllers/authController.js');
+const { register, login, sendFriendRequest, acceptFriendRequest, getFriends, searchUsers, pendingRequest, rejectRequest, removeFriend, getUserInfo  } = require('../controllers/authController.js');
 const auth = require('../middleware/authMiddleware.js');
 
 const router = express.Router();
@@ -13,4 +13,5 @@ router.get('/search', auth, searchUsers); // Search users by username
 router.get('/pending-requests', auth, pendingRequest); // Get pending friend requests
 router.post('/reject-request', auth, rejectRequest)//rejecting the friend request
 router.post('/remove-friend', auth, removeFriend)
+router.get('/getFriendInfo',auth , getUserInfo)
 module.exports = router;

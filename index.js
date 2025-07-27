@@ -40,6 +40,7 @@ app.use((req, res, next) => {
 app.use('/api/auth', authRoutes);
 app.use('/api', messageRoutes);
 app.use('/api/uploads', uploadRoutes);
+app.use('/api/users', authRoutes)
 
 // === SOCKET.IO ===
 const users = {}; // { userId: [socketId, ...] }
