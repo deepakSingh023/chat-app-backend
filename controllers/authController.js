@@ -64,32 +64,52 @@ const login = async (req, res) => {
 
 // Send a friend request
 const sendFriendRequest = async (req, res) => {
-  const { receiverId } = req.body; // Receiver ID from the request body
-  const senderId = req.user.id; // Authenticated user ID from the middleware
+  const { receiverId } = req.body;
+  const senderId = req.user.id;
 
   try {
+    if (senderId === receiverId) {
+      return res.status(400).json({ message: 'You cannot send a friend request to yourself.' });
+    }
+
+    const sender = await User.findById(senderId);
     const receiver = await User.findById(receiverId);
-    if (!receiver) {
-      return res.status(404).json({ message: 'Receiver not found.' });
+
+    if (!receiver || !sender) {
+      return res.status(404).json({ message: 'User not found.' });
     }
 
     if (receiver.friends.includes(senderId)) {
       return res.status(400).json({ message: 'You are already friends with this user.' });
     }
 
-    if (senderId === receiverId) {
-      return res.status(400).json({ message: 'You cannot send a friend request to yourself.' });
+    // ✅ If receiver already sent a request to sender -> auto accept
+    if (sender.receivedFriendRequests.includes(receiverId)) {
+      // Remove receiverId from sender's received requests
+      sender.receivedFriendRequests = sender.receivedFriendRequests.filter(id => id.toString() !== receiverId);
+      // Remove senderId from receiver's sent requests
+      receiver.sentFriendRequests = receiver.sentFriendRequests.filter(id => id.toString() !== senderId);
+
+      // Add each other to friends
+      sender.friends.push(receiverId);
+      receiver.friends.push(senderId);
+
+      await sender.save();
+      await receiver.save();
+
+      return res.status(200).json({ message: 'Friend request accepted automatically. You are now friends.' });
     }
 
+    // ✅ If already sent request, don't send again
     if (receiver.receivedFriendRequests.includes(senderId)) {
       return res.status(400).json({ message: 'Friend request already sent.' });
     }
 
+    // ✅ Otherwise, send a new friend request
     receiver.receivedFriendRequests.push(senderId);
-    await receiver.save();
-
-    const sender = await User.findById(senderId);
     sender.sentFriendRequests.push(receiverId);
+
+    await receiver.save();
     await sender.save();
 
     res.status(200).json({ message: 'Friend request sent successfully.' });
@@ -97,6 +117,7 @@ const sendFriendRequest = async (req, res) => {
     res.status(500).json({ message: 'Error sending friend request.', error: error.message });
   }
 };
+
 
 // Accept a friend request
 const acceptFriendRequest = async (req, res) => {
